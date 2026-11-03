@@ -1,0 +1,35 @@
+# Build
+build/
+cmake-build-*/
+out/
+**/FreeAnticip8_artefacts/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.xcworkspace/
+*.xcodeproj/
+DerivedData/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local / secrets
+.env
+.env.*
+*.pem
+*.p12
+*.key
+
+# Packages (local copies)
+*.vst3/
+*.component/
+*.exe
+*.dll
+*.exp
+*.lib
+*.ilk
+*.pdb

@@ -1,0 +1,66 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: VST3 + AU (universal)
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-8.0.6-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            juce-8.0.6-${{ runner.os }}-
+
+      - name: Configure (Release, arm64+x86_64)
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build VST3 + AU
+        run: |
+          cmake --build build --config Release \
+            --target FreeAnticip8_VST3 FreeAnticip8_AU \
+            -j "$(sysctl -n hw.ncpu)"
+
+      - name: Collect artefacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ART="build/FreeAnticip8_artefacts/Release"
+          # JUCE may nest product folders differently — collect whatever exists
+          find "$ART" -type d -name "*.vst3" -print0 2>/dev/null | while IFS= read -r -d '' p; do
+            cp -R "$p" dist/
+          done
+          find "$ART" -type d -name "*.component" -print0 2>/dev/null | while IFS= read -r -d '' p; do
+            cp -R "$p" dist/
+          done
+          echo "=== dist ==="
+          find dist -maxdepth 3 -print
+          test -n "$(find dist -name '*.vst3' -o -name '*.component' | head -1)"
+
+      - name: Upload macOS plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: FREE-ANTICIP8-macOS
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
