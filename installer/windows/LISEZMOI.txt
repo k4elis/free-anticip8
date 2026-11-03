@@ -1,0 +1,11 @@
+FREE ANTICIP8 — installation Windows
+====================================
+
+Option A (recommandee) :
+  Lance FREE-ANTICIP8-Setup-Windows.exe (admin) — copie le VST3 au bon endroit.
+
+Option B (manuelle) :
+  Copie le dossier "FREE ANTICIP8.vst3" vers :
+  C:\Program Files\Common Files\VST3\
+
+Puis rescanne les plugins dans ta DAW (Reaper, Ableton, FL…).

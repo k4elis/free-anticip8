@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (ex: v1.0.0) — cree/maj la Release GitHub"
+        required: true
+        default: "v1.0.0"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows VST3 + Setup.exe
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-8.0.6-win-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: juce-8.0.6-win-
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target FreeAnticip8_VST3 -j 8
+
+      - name: Stage VST3 payload
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem -Path "build\FreeAnticip8_artefacts\Release" -Recurse -Directory -Filter "FREE ANTICIP8.vst3" |
+                 Where-Object { Test-Path (Join-Path $_.FullName "Contents\x86_64-win") } |
+                 Select-Object -First 1
+          if (-not $src) { throw "VST3 introuvable" }
+          New-Item -ItemType Directory -Force -Path "installer\windows\payload" | Out-Null
+          Copy-Item -Recurse -Force $src.FullName\* "installer\windows\payload\"
+          New-Item -ItemType Directory -Force -Path "dist\windows" | Out-Null
+          # ZIP portable (bundle complet)
+          $zipRoot = "dist\windows\portable"
+          New-Item -ItemType Directory -Force -Path $zipRoot | Out-Null
+          Copy-Item -Recurse -Force $src.FullName (Join-Path $zipRoot "FREE ANTICIP8.vst3")
+          Copy-Item -Force "installer\windows\LISEZMOI.txt" $zipRoot
+          Compress-Archive -Path "$zipRoot\*" -DestinationPath "dist\windows\FREE-ANTICIP8-Windows-VST3.zip" -Force
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile Setup.exe
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\setup.iss
+
+      - name: Upload Windows artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            dist/windows/FREE-ANTICIP8-Setup-Windows.exe
+            dist/windows/FREE-ANTICIP8-Windows-VST3.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS VST3 + AU
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-8.0.6-mac-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: juce-8.0.6-mac-
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build VST3 + AU
+        run: |
+          cmake --build build --config Release \
+            --target FreeAnticip8_VST3 FreeAnticip8_AU \
+            -j "$(sysctl -n hw.ncpu)"
+
+      - name: Package macOS installer zip
+        run: |
+          set -euo pipefail
+          ART="build/FreeAnticip8_artefacts/Release"
+          PKG="dist/macos/FREE-ANTICIP8-macOS"
+          mkdir -p "$PKG"
+          find "$ART" -type d -name "*.vst3" | while read -r p; do
+            cp -R "$p" "$PKG/"
+          done
+          find "$ART" -type d -name "*.component" | while read -r p; do
+            cp -R "$p" "$PKG/"
+          done
+          cp installer/macos/Install.command "$PKG/"
+          cp installer/macos/LISEZMOI.txt "$PKG/"
+          chmod +x "$PKG/Install.command"
+          # ad-hoc sign bundles in the package (helps Gatekeeper a bit)
+          find "$PKG" -name "*.vst3" -o -name "*.component" | while read -r b; do
+            xattr -cr "$b" || true
+            codesign --force --deep -s - "$b" || true
+          done
+          test -n "$(find "$PKG" -name '*.vst3' | head -1)"
+          mkdir -p dist/macos
+          ditto -c -k --sequesterRsrc --keepParent "$PKG" "dist/macos/FREE-ANTICIP8-macOS.zip"
+          ls -la dist/macos
+
+      - name: Upload macOS artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: dist/macos/FREE-ANTICIP8-macOS.zip
+          if-no-files-found: error
+
+  publish:
+    name: GitHub Release
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Flatten assets
+        run: |
+          mkdir -p out
+          find release-assets -type f \( -name "*.exe" -o -name "*.zip" \) -exec cp -v {} out/ \;
+          ls -la out
+
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: FREE ANTICIP8 ${{ steps.ver.outputs.tag }}
+          draft: false
+          generate_release_notes: true
+          body: |
+            ## Installateurs
+
+            | Fichier | Plateforme |
+            |---------|------------|
+            | `FREE-ANTICIP8-Setup-Windows.exe` | Windows 64-bit (installe le VST3) |
+            | `FREE-ANTICIP8-Windows-VST3.zip` | Windows — copie manuelle |
+            | `FREE-ANTICIP8-macOS.zip` | macOS universal — double-clic `Install.command` |
+
+            ### macOS
+            Si Gatekeeper bloque : clic droit → Ouvrir sur `Install.command`.
+
+            ### Windows
+            Lance le Setup en admin, ou copie le `.vst3` dans `C:\Program Files\Common Files\VST3\`.
+          files: |
+            out/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

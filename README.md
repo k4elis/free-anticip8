@@ -53,22 +53,17 @@ cmake --build build --config Release
 Copy the `.vst3` to `~/Library/Audio/Plug-Ins/VST3` and the `.component` to `~/Library/Audio/Plug-Ins/Components`.
 Unsigned builds may need `xattr -cr "FREE ANTICIP8.vst3"` / re-signing (`codesign --force --deep -s - ...`) for Logic/Ableton; AU: run `auval -v aufx Fa8x FrAu`.
 
-### Build Mac sans Mac (GitHub Actions)
+### Releases (Windows + Mac, sans Mac local)
 
-Le workflow `.github/workflows/build-macos.yml` compile VST3 + AU universels sur un runner `macos-14`.
+Le workflow **Release** (`.github/workflows/release.yml`) build Win + Mac et publie une GitHub Release avec :
 
-1. Pousse le repo sur GitHub (`main`).
-2. Onglet **Actions** → workflow **Build macOS** (aussi déclenchable à la main via *Run workflow*).
-3. Télécharge l’artefact **FREE-ANTICIP8-macOS** (contient `.vst3` + `.component`).
-4. Sur le Mac de destination :
-   ```bash
-   xattr -cr "FREE ANTICIP8.vst3" "FREE ANTICIP8.component"
-   codesign --force --deep -s - "FREE ANTICIP8.vst3"
-   codesign --force --deep -s - "FREE ANTICIP8.component"
-   cp -R "FREE ANTICIP8.vst3" ~/Library/Audio/Plug-Ins/VST3/
-   cp -R "FREE ANTICIP8.component" ~/Library/Audio/Plug-Ins/Components/
-   ```
-   Pas de compte Apple Developer requis pour cet ad-hoc sign local.
+- `FREE-ANTICIP8-Setup-Windows.exe` — installateur VST3
+- `FREE-ANTICIP8-Windows-VST3.zip` — bundle portable
+- `FREE-ANTICIP8-macOS.zip` — VST3 + AU + `Install.command`
+
+Déclenchement : tag `v*` **ou** Actions → Release → *Run workflow* (ex. `v1.0.0`).
+
+Page Releases : https://github.com/k4elis/free-anticip8/releases
 
 **Linux**: `sudo apt install libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxext-dev libxcursor-dev libxcomposite-dev libgl1-mesa-dev`, then
 `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j`.

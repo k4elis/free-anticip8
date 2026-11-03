@@ -1,0 +1,11 @@
+FREE ANTICIP8 — installation macOS
+=================================
+
+1. Double-clique "Install.command"
+   (si macOS bloque : clic droit → Ouvrir)
+2. Les plugins vont dans :
+   ~/Library/Audio/Plug-Ins/VST3/
+   ~/Library/Audio/Plug-Ins/Components/
+3. Rescanne les plugins dans ta DAW (Logic, Ableton, Reaper…).
+
+Pas besoin de compte Apple Developer : signature ad-hoc locale.
