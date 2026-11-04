@@ -46,16 +46,28 @@ jobs:
           $src = Get-ChildItem -Path "build\FreeAnticip8_artefacts\Release" -Recurse -Directory -Filter "FREE ANTICIP8.vst3" |
                  Where-Object { Test-Path (Join-Path $_.FullName "Contents\x86_64-win") } |
                  Select-Object -First 1
-          if (-not $src) { throw "VST3 introuvable" }
-          New-Item -ItemType Directory -Force -Path "installer\windows\payload" | Out-Null
-          Copy-Item -Recurse -Force $src.FullName\* "installer\windows\payload\"
+          if (-not $src) {
+            Get-ChildItem "build\FreeAnticip8_artefacts\Release" -Recurse | Select-Object -First 50 FullName
+            throw "VST3 introuvable"
+          }
+          Write-Host "SRC=$($src.FullName)"
+          $payload = "installer\windows\payload"
+          New-Item -ItemType Directory -Force -Path $payload | Out-Null
+          & robocopy $src.FullName $payload /E /NFL /NDL /NJH /NJS /nc /ns /np
+          if ($LASTEXITCODE -ge 8) { throw "robocopy payload failed: $LASTEXITCODE" }
           New-Item -ItemType Directory -Force -Path "dist\windows" | Out-Null
-          # ZIP portable (bundle complet)
           $zipRoot = "dist\windows\portable"
-          New-Item -ItemType Directory -Force -Path $zipRoot | Out-Null
-          Copy-Item -Recurse -Force $src.FullName (Join-Path $zipRoot "FREE ANTICIP8.vst3")
+          $bundle = Join-Path $zipRoot "FREE ANTICIP8.vst3"
+          New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+          & robocopy $src.FullName $bundle /E /NFL /NDL /NJH /NJS /nc /ns /np
+          if ($LASTEXITCODE -ge 8) { throw "robocopy zip root failed: $LASTEXITCODE" }
           Copy-Item -Force "installer\windows\LISEZMOI.txt" $zipRoot
-          Compress-Archive -Path "$zipRoot\*" -DestinationPath "dist\windows\FREE-ANTICIP8-Windows-VST3.zip" -Force
+          $zip = (Resolve-Path "dist\windows").Path + "\FREE-ANTICIP8-Windows-VST3.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $zipRoot).Path, $zip)
+          Get-ChildItem "dist\windows" | Format-Table Name, Length
+          Get-ChildItem $payload -Recurse | Select-Object -First 20 FullName
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
