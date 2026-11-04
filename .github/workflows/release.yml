@@ -68,6 +68,8 @@ jobs:
           [System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $zipRoot).Path, $zip)
           Get-ChildItem "dist\windows" | Format-Table Name, Length
           Get-ChildItem $payload -Recurse | Select-Object -First 20 FullName
+          # robocopy sets LASTEXITCODE 0-7 on success — reset so the step doesn't fail
+          exit 0
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
