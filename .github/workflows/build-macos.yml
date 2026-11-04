@@ -1,13 +1,11 @@
+# Build Mac seul (debug). Pour les installateurs + Release GitHub, utiliser "Release".
 name: Build macOS
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: macos-${{ github.ref }}
+  group: macos-manual
   cancel-in-progress: true
 
 jobs:
@@ -46,14 +44,12 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           ART="build/FreeAnticip8_artefacts/Release"
-          # JUCE may nest product folders differently — collect whatever exists
           find "$ART" -type d -name "*.vst3" -print0 2>/dev/null | while IFS= read -r -d '' p; do
             cp -R "$p" dist/
           done
           find "$ART" -type d -name "*.component" -print0 2>/dev/null | while IFS= read -r -d '' p; do
             cp -R "$p" dist/
           done
-          echo "=== dist ==="
           find dist -maxdepth 3 -print
           test -n "$(find dist -name '*.vst3' -o -name '*.component' | head -1)"
 
